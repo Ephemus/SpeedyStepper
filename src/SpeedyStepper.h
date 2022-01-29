@@ -30,6 +30,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// Variable deceleration support by <maker@phemus.org>, 2022
 
 #ifndef SpeedyStepper_h
 #define SpeedyStepper_h
@@ -55,6 +56,7 @@ class SpeedyStepper
     void setCurrentPositionInMillimeters(float currentPositionInMillimeter);
     void setSpeedInMillimetersPerSecond(float speedInMillimetersPerSecond);
     void setAccelerationInMillimetersPerSecondPerSecond(float accelerationInMillimetersPerSecondPerSecond);
+    void setDecelerationInMillimetersPerSecondPerSecond(float decelerationInMillimetersPerSecondPerSecond);    
     bool moveToHomeInMillimeters(long directionTowardHome, float speedInMillimetersPerSecond, long maxDistanceToMoveInMillimeters, int homeLimitSwitchPin);
     void moveRelativeInMillimeters(float distanceToMoveInMillimeters);
     void setupRelativeMoveInMillimeters(float distanceToMoveInMillimeters);
@@ -68,6 +70,7 @@ class SpeedyStepper
     void setSpeedInRevolutionsPerSecond(float speedInRevolutionsPerSecond);
     void setCurrentPositionInRevolutions(float currentPositionInRevolutions);
     void setAccelerationInRevolutionsPerSecondPerSecond(float accelerationInRevolutionsPerSecondPerSecond);
+    void setDecelerationInRevolutionsPerSecondPerSecond(float decelerationInRevolutionsPerSecondPerSecond);
     bool moveToHomeInRevolutions(long directionTowardHome, float speedInRevolutionsPerSecond, long maxDistanceToMoveInRevolutions, int homeLimitSwitchPin);
     void moveRelativeInRevolutions(float distanceToMoveInRevolutions);
     void setupRelativeMoveInRevolutions(float distanceToMoveInRevolutions);
@@ -82,6 +85,7 @@ class SpeedyStepper
     void setupStop();
     void setSpeedInStepsPerSecond(float speedInStepsPerSecond);
     void setAccelerationInStepsPerSecondPerSecond(float accelerationInStepsPerSecondPerSecond);
+    void setDecelerationInStepsPerSecondPerSecond(float decelerationInStepsPerSecondPerSecond);
     bool moveToHomeInSteps(long directionTowardHome, float speedInStepsPerSecond, long maxDistanceToMoveInSteps, int homeSwitchPin);
     void moveRelativeInSteps(long distanceToMoveInSteps);
     void setupRelativeMoveInSteps(long distanceToMoveInSteps);
@@ -100,6 +104,7 @@ class SpeedyStepper
     byte directionPin;
     float desiredSpeed_InStepsPerSecond;
     float acceleration_InStepsPerSecondPerSecond;
+    float deceleration_InStepsPerSecondPerSecond;
     long targetPosition_InSteps;
     float stepsPerMillimeter;
     float stepsPerRevolution;
@@ -111,6 +116,7 @@ class SpeedyStepper
     float ramp_NextStepPeriod_InUS;
     unsigned long ramp_LastStepTime_InUS;
     float acceleration_InStepsPerUSPerUS;
+    float deceleration_InStepsPerUSPerUS;
     float currentStepPeriod_InUS;
     long currentPosition_InSteps;
 };

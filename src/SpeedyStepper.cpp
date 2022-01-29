@@ -1,4 +1,3 @@
-
 //      ******************************************************************
 //      *                                                                *
 //      *                   Speedy Stepper Motor Driver                  *
@@ -30,6 +29,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+// Variable deceleration support by <maker@phemus.org>, 2022
 
 
 //
@@ -211,6 +212,7 @@ SpeedyStepper::SpeedyStepper()
   currentPosition_InSteps = 0;
   desiredSpeed_InStepsPerSecond = 200.0;
   acceleration_InStepsPerSecondPerSecond = 200.0;
+  deceleration_InStepsPerSecondPerSecond = 200.0;
   currentStepPeriod_InUS = 0.0;
 }
 
@@ -299,12 +301,29 @@ void SpeedyStepper::setSpeedInMillimetersPerSecond(float speedInMillimetersPerSe
 // Note: this can only be called when the motor is stopped
 //  Enter:  accelerationInMillimetersPerSecondPerSecond = rate of acceleration,  
 //          units in millimeters/second/second
+// Note: this automatically sets deceleration equal to acceleration
 //
 void SpeedyStepper::setAccelerationInMillimetersPerSecondPerSecond(
                       float accelerationInMillimetersPerSecondPerSecond)
 {
     acceleration_InStepsPerSecondPerSecond = 
       accelerationInMillimetersPerSecondPerSecond * stepsPerMillimeter;
+    setDecelerationInMillimetersPerSecondPerSecond(accelerationInMillimetersPerSecondPerSecond);
+}
+
+
+
+//
+// set the rate of deceleration, units in millimeters/second/second
+// Note: this can only be called when the motor is stopped
+//  Enter:  decelerationInMillimetersPerSecondPerSecond = rate of deceleration,  
+//          units in millimeters/second/second
+//
+void SpeedyStepper::setDecelerationInMillimetersPerSecondPerSecond(
+                      float decelerationInMillimetersPerSecondPerSecond)
+{
+    deceleration_InStepsPerSecondPerSecond = 
+      decelerationInMillimetersPerSecondPerSecond * stepsPerMillimeter;
 }
 
 
@@ -472,12 +491,29 @@ void SpeedyStepper::setSpeedInRevolutionsPerSecond(float speedInRevolutionsPerSe
 // Note: this can only be called when the motor is stopped
 //  Enter:  accelerationInRevolutionsPerSecondPerSecond = rate of acceleration,  
 //            units inrevolutions/second/second
+// Note: this automatically sets deceleration equal to acceleration
 //
 void SpeedyStepper::setAccelerationInRevolutionsPerSecondPerSecond(
                       float accelerationInRevolutionsPerSecondPerSecond)
 {
     acceleration_InStepsPerSecondPerSecond = 
        accelerationInRevolutionsPerSecondPerSecond * stepsPerRevolution;
+    setDecelerationInRevolutionsPerSecondPerSecond(accelerationInRevolutionsPerSecondPerSecond);
+}
+
+
+
+//
+// set the rate of deceleration, units in revolutions/second/second
+// Note: this can only be called when the motor is stopped
+//  Enter:  decelerationInRevolutionsPerSecondPerSecond = rate of deceleration,  
+//            units inrevolutions/second/second
+//
+void SpeedyStepper::setDecelerationInRevolutionsPerSecondPerSecond(
+                      float decelerationInRevolutionsPerSecondPerSecond)
+{
+    deceleration_InStepsPerSecondPerSecond = 
+       decelerationInRevolutionsPerSecondPerSecond * stepsPerRevolution;
 }
 
 
@@ -653,11 +689,27 @@ void SpeedyStepper::setSpeedInStepsPerSecond(float speedInStepsPerSecond)
 // Note: this can only be called when the motor is stopped
 //  Enter:  accelerationInStepsPerSecondPerSecond = rate of acceleration, units in 
 //          steps/second/second
+// Note: this automatically sets deceleration equal to acceleration
 //
 void SpeedyStepper::setAccelerationInStepsPerSecondPerSecond(
                       float accelerationInStepsPerSecondPerSecond)
 {
     acceleration_InStepsPerSecondPerSecond = accelerationInStepsPerSecondPerSecond;
+    setDecelerationInStepsPerSecondPerSecond(accelerationInStepsPerSecondPerSecond);
+}
+
+
+
+//
+// set the rate of deceleration, units in steps/second/second
+// Note: this can only be called when the motor is stopped
+//  Enter:  decelerationInStepsPerSecondPerSecond = rate of deceleration, units in 
+//          steps/second/second
+//
+void SpeedyStepper::setDecelerationInStepsPerSecondPerSecond(
+                      float decelerationInStepsPerSecondPerSecond)
+{
+    deceleration_InStepsPerSecondPerSecond = decelerationInStepsPerSecondPerSecond;
 }
 
 
@@ -837,6 +889,8 @@ void SpeedyStepper::moveToPositionInSteps(long absolutePositionToMoveToInSteps)
 void SpeedyStepper::setupMoveInSteps(long absolutePositionToMoveToInSteps)
 {
   long distanceToTravel_InSteps;
+  // float move_fraction;
+  long accelerationDistance_InSteps;
   
   
   //
@@ -859,11 +913,19 @@ void SpeedyStepper::setupMoveInSteps(long absolutePositionToMoveToInSteps)
 
 
   //
+  // determine the number of steps needed to go from a velocity of 0 up to the
+  // desired velocity, Steps = Velocity^2 / (2 * Accelleration)
+  //
+  accelerationDistance_InSteps = (long) round((desiredSpeed_InStepsPerSecond * 
+    desiredSpeed_InStepsPerSecond) / (2.0 * acceleration_InStepsPerSecondPerSecond));
+
+
+  //
   // determine the number of steps needed to go from the desired velocity down to a 
-  // velocity of 0, Steps = Velocity^2 / (2 * Accelleration)
+  // velocity of 0, Steps = Velocity^2 / (2 * Decelleration)
   //
   decelerationDistance_InSteps = (long) round((desiredSpeed_InStepsPerSecond * 
-    desiredSpeed_InStepsPerSecond) / (2.0 * acceleration_InStepsPerSecondPerSecond));
+    desiredSpeed_InStepsPerSecond) / (2.0 * deceleration_InStepsPerSecondPerSecond));
   
   
   //
@@ -884,10 +946,16 @@ void SpeedyStepper::setupMoveInSteps(long absolutePositionToMoveToInSteps)
 
 
   //
-  // check if travel distance is too short to accelerate up to the desired velocity
+  // Check if travel distance is too short to accelerate/decelerate fully relative to the desired velocity.
+  // The move function only uses the deceleration distance, so if there are not enough steps to fully
+  // accelerate and decelerate, then we trim the deceleration distance proportionally so that the rate of
+  // acceleration and deceleration remain the same. In this case, the desired velocity will not be reached.
   //
-  if (distanceToTravel_InSteps <= (decelerationDistance_InSteps * 2L))
-    decelerationDistance_InSteps = (distanceToTravel_InSteps / 2L);
+  if (distanceToTravel_InSteps < (decelerationDistance_InSteps + accelerationDistance_InSteps))
+    decelerationDistance_InSteps = (long) round (
+      (distanceToTravel_InSteps * decelerationDistance_InSteps) /
+      (decelerationDistance_InSteps + accelerationDistance_InSteps)
+      );
 
 
   //
@@ -895,6 +963,7 @@ void SpeedyStepper::setupMoveInSteps(long absolutePositionToMoveToInSteps)
   //
   ramp_NextStepPeriod_InUS = ramp_InitialStepPeriod_InUS;
   acceleration_InStepsPerUSPerUS = acceleration_InStepsPerSecondPerSecond / 1E12;
+  deceleration_InStepsPerUSPerUS = deceleration_InStepsPerSecondPerSecond / 1E12;
   startNewMove = true;
 }
 
@@ -951,7 +1020,8 @@ bool SpeedyStepper::processMovement(void)
   // decelerating
   //
   if (distanceToTarget_InSteps == decelerationDistance_InSteps)
-    acceleration_InStepsPerUSPerUS = -acceleration_InStepsPerUSPerUS;
+    acceleration_InStepsPerUSPerUS = -deceleration_InStepsPerUSPerUS;
+    //TODO - make this better
   
   //
   // execute the step on the rising edge
